@@ -1,0 +1,23 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "target": "es2017",
+    "lib": ["es2017"],
+    "types": ["node", "jest"],
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "declaration": true,
+    "outDir": "dist",
+    "sourceMap": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts"
+  ]
+}
