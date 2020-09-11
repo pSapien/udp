@@ -1,0 +1,9 @@
+{
+  "name": "@bhoos/udp",
+  "version": "1.0.0",
+  "description": "UDP direct and streaming communication library",
+  "main": "dist/index.js",
+  "repository": "git@github.com:bhoos/udp",
+  "author": "Ranjan Shrestha <ranjan@sharingapples.com>",
+  "license": "MIT"
+}
