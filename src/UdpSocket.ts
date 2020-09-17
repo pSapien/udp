@@ -19,6 +19,7 @@ export class UdpSocket<S = UdpStream> {
   private streamHandlers = new Map<number, (msg: Serializable, userData: S, stream: UdpStream) => void>();
   private connectHandlers = new Map<number, (msg: Serializable, stream: UdpStream) => Promise<S>>();
   private closeHandler: (userData: S, stream: UdpStream) => void;
+  private openHandler: (userData: S, stream: UdpStream) => void;
   private stream: UdpStream;
   private streams: Map<string, { stream: UdpStream, userData: S}>;
   private closing: boolean = false;
@@ -84,6 +85,13 @@ export class UdpSocket<S = UdpStream> {
     this.closeHandler = handler;
   }
 
+  onOpen(handler: (userData: S, stream: UdpStream) => void) {
+    if (this.openHandler) {
+      throw new Error('Open handler is already defined');
+    }
+    this.openHandler = handler;
+  }
+
   onConnect<T extends Serializable>(clazz: new (...args: any[]) => T, handler: (msg: T, stream: UdpStream) => Promise<S>) {
     const id = this.oracle.id(clazz);
     this.connectHandlers.set(id, handler);
@@ -147,6 +155,7 @@ export class UdpSocket<S = UdpStream> {
               // have been received within that time
               if(userData && !this.streams.has(remoteId)) {
                 this.streams.set(remoteId, { stream, userData });
+                if (this.openHandler) this.openHandler(userData, stream);
               } else {
                 // Get rid of the stream (without closing), just need to release the resources
                 stream.end();
