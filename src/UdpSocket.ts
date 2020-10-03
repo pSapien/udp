@@ -47,6 +47,10 @@ export class UdpSocket<S = UdpStream> {
     return this.stream;
   }
 
+  getStream() {
+    return this.stream;
+  }
+
   private handleClose(userData: S, stream: UdpStream) {
     if (this.closeHandler) this.closeHandler(userData, stream);
     if (this.closing) {
