@@ -101,7 +101,7 @@ export class UdpSocket<S = UdpStream> {
     this.connectHandlers.set(id, handler);
   }
 
-  onStream<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, user: S) => void) {
+  onStream<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, user: S, stream: UdpStream) => void) {
     const id = this.oracle.id(clazz);
     this.streamHandlers.set(id, handler);
   }
@@ -130,7 +130,7 @@ export class UdpSocket<S = UdpStream> {
           if (!streamHandler) {
             this.raiseError(new Error(`No stream handler found for ${id}`));
           } else {
-            streamHandler(item, null, this.stream);
+            streamHandler(item, this.stream as never as S, this.stream);
           }
         });
       } else {
