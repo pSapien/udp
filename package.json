@@ -3,7 +3,10 @@
   "version": "1.0.2",
   "description": "UDP direct and streaming communication library",
   "main": "dist/index.js",
-  "react-native": "src/index.ts",
+  "react-native": {
+    "dist/index.js": "src/index.ts",
+    "dgram": "react-native-udp"
+  },
   "scripts": {
     "test": "jest",
     "clean": "rimraf dist",
