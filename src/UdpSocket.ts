@@ -15,7 +15,7 @@ export class UdpSocket<S = UdpStream> {
   private version: number;
   readonly oracle: Oracle;
 
-  private handlers = new Map<number, (msg: Serializable) => void>();
+  private handlers = new Map<number, (msg: Serializable, source: EndPoint) => void>();
   private streamHandlers = new Map<number, (msg: Serializable, userData: S, stream: UdpStream) => void>();
   private connectHandlers = new Map<number, (msg: Serializable, stream: UdpStream) => Promise<S>>();
   private closeHandler: (userData: S, stream: UdpStream) => void;
@@ -36,8 +36,8 @@ export class UdpSocket<S = UdpStream> {
     this.streams = new Map<string, { stream: UdpStream, userData: S}>();
   }
 
-  connect(endpoint: EndPoint, version: number, message: Serializable): UdpStream {
-    const stream = new UdpStream(this, endpoint, version, () => {
+  connect(endpoint: EndPoint, message: Serializable): UdpStream {
+    const stream = new UdpStream(this, endpoint, this.version, () => {
       this.stream = null;
       this.closing = true;
       this.handleClose(null, stream);
@@ -77,8 +77,8 @@ export class UdpSocket<S = UdpStream> {
     this.socket.close();
   }
 
-  on<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T) => void) {
-    const id = this.oracle.id(clazz);
+  on<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, source: EndPoint) => void) {
+    const id = Oracle.id(clazz);
     this.handlers.set(id, handler);
   }
 
@@ -97,12 +97,12 @@ export class UdpSocket<S = UdpStream> {
   }
 
   onConnect<T extends Serializable>(clazz: new (...args: any[]) => T, handler: (msg: T, stream: UdpStream) => Promise<S>) {
-    const id = this.oracle.id(clazz);
+    const id = Oracle.id(clazz);
     this.connectHandlers.set(id, handler);
   }
 
   onStream<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, user: S, stream: UdpStream) => void) {
-    const id = this.oracle.id(clazz);
+    const id = Oracle.id(clazz);
     this.streamHandlers.set(id, handler);
   }
 
@@ -117,15 +117,15 @@ export class UdpSocket<S = UdpStream> {
     const buffer = Buffer.from(data);
     if (type === GENERAL) {
       const serializer = new BufferSerializer(this.version, buffer, 1);
-      const obj = this.oracle.serialize(serializer, null);
-      const id = this.oracle.identify(obj);
+      const obj = this.oracle.serialize(null, serializer);
+      const id = Oracle.identify(obj);
       const handler = this.handlers.get(id);
-      handler(obj);
+      handler(obj, rinfo);
     } else if (type === STREAM) {
       if (this.stream) {
         const serializer = new BufferSerializer(this.stream.version, buffer, 1);
         this.stream.receive(serializer, (item: Serializable) => {
-          const id = this.oracle.identify(item);
+          const id = Oracle.identify(item);
           const streamHandler = this.streamHandlers.get(id);
           if (!streamHandler) {
             this.raiseError(new Error(`No stream handler found for ${id}`));
@@ -148,7 +148,7 @@ export class UdpSocket<S = UdpStream> {
           });
           const serializer = new BufferSerializer(stream.version, buffer, 1);
           stream.receive(serializer, async (msg) => {
-            const id = this.oracle.identify(msg);
+            const id = Oracle.identify(msg);
             const connectHandler = this.connectHandlers.get(id);
             if (!connectHandler) {
               stream.close();
@@ -170,7 +170,7 @@ export class UdpSocket<S = UdpStream> {
           const { stream, userData } = endpoint;
           const serializer = new BufferSerializer(stream.version, buffer, 1);
           stream.receive(serializer, (item: Serializable) => {
-            const id = this.oracle.identify(item);
+            const id = Oracle.identify(item);
             const streamHandler = this.streamHandlers.get(id);
             if (!streamHandler) {
               this.raiseError(new Error(`No stream handler found for ${id}`));
@@ -195,7 +195,7 @@ export class UdpSocket<S = UdpStream> {
   send(to: EndPoint, msg: Serializable) {
     const serializer = new BufferSerializer(this.version, 1000);
     serializer.uint8(GENERAL);
-    this.oracle.serialize(serializer, msg);
+    this.oracle.serialize(msg, serializer);
     this.socket.send(serializer.getBuffer(), 0, serializer.length, to.port, to.address);
   }
 }

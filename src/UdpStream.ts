@@ -115,7 +115,7 @@ export class UdpStream implements Stream {
         if (!this.sendHandle) this.send();
 
         this.remoteSeq = seq;
-        const item = this.socket.oracle.serialize(serializer, null);
+        const item = this.socket.oracle.serialize(null, serializer);
         handler(item);
       }
     } while (true);
@@ -130,7 +130,7 @@ export class UdpStream implements Stream {
       const revert = serializer.mark();
       try {
         serializer.uint16(k.seq);
-        this.socket.oracle.serialize(serializer, k.item);
+        this.socket.oracle.serialize(k.item, serializer);
         remaining -= 1;
       } catch (err) {
         revert();
