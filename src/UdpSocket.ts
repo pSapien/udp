@@ -2,9 +2,12 @@ import { createSocket, Socket } from 'dgram';
 import { AddressInfo } from 'net';
 import { EndPoint, UdpStream } from './UdpStream';
 import { BufferSerializer, Serializable, Oracle } from '@bhoos/serialization';
+import { Platform } from 'react-native';
 
 const GENERAL = 0;
 const STREAM = 1;
+const BROADCAST_ADDRESS = '255.255.255.255';
+const SOCKET_CLOSE_TIMEOUT = 300;
 
 function getEndPointId(endpoint: EndPoint) {
   return `${endpoint.address}:${endpoint.port}`;
@@ -18,8 +21,8 @@ export class UdpSocket<S = UdpStream> {
   private handlers = new Map<number, (msg: Serializable, source: EndPoint) => void>();
   private streamHandlers = new Map<number, (msg: Serializable, userData: S, stream: UdpStream) => void>();
   private connectHandlers = new Map<number, (msg: Serializable, stream: UdpStream) => Promise<S>>();
-  private closeHandler: (userData: S, stream: UdpStream) => void;
   private openHandler: (userData: S, stream: UdpStream) => void;
+  private closeHandler: (userData: S, stream: UdpStream) => void;
   private stream: UdpStream;
   private streams: Map<string, { stream: UdpStream, userData: S}>;
   private closing: boolean = false;
@@ -29,6 +32,11 @@ export class UdpSocket<S = UdpStream> {
     this.oracle = oracle;
     this.socket = createSocket('udp4');
     this.socket.on('message', this.handleMessage);
+    this.socket.on('listening', () => {
+      if (Platform.OS !== 'android' || Platform.Version <= 23) {
+        this.socket.setBroadcast(true);
+      }
+    });
   }
 
   listen(port: number) {
@@ -73,26 +81,30 @@ export class UdpSocket<S = UdpStream> {
   }
 
   end() {
-    this.socket.off('message', this.handleMessage);
+    this.handlers.clear();
+    this.streamHandlers.clear();
+    this.connectHandlers.clear();
+    this.openHandler = undefined;
+    this.closeHandler = undefined;
+
+    this.socket.removeAllListeners();
     this.socket.close();
+    // this.socket = undefined;
   }
 
   on<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, source: EndPoint) => void) {
     const id = Oracle.id(clazz);
+    if (this.handlers.has(id)) throw new Error(`Multiple handlers not allowed ${clazz.name}`);
     this.handlers.set(id, handler);
   }
 
   onClose(handler: (userData: S, stream: UdpStream) => void) {
-    if (this.closeHandler) {
-      throw new Error('Close handler is already defined');
-    }
+    if (this.closeHandler) throw new Error('Close handler is already defined');
     this.closeHandler = handler;
   }
 
   onOpen(handler: (userData: S, stream: UdpStream) => void) {
-    if (this.openHandler) {
-      throw new Error('Open handler is already defined');
-    }
+    if (this.openHandler) throw new Error('Open handler is already defined');
     this.openHandler = handler;
   }
 
@@ -112,15 +124,16 @@ export class UdpSocket<S = UdpStream> {
 
   private handleMessage = (data: Uint8Array, rinfo: AddressInfo) => {
     const type = data[0];
-    console.log(`Rx: ${rinfo.address}:${rinfo.port}, ${type}, ${data.length}`, data);
 
+    // console.log(`Rx: ${rinfo.address}:${rinfo.port}, ${type}, ${data.length}`, data);
     const buffer = Buffer.from(data);
     if (type === GENERAL) {
       const serializer = new BufferSerializer(this.version, buffer, 1);
       const obj = this.oracle.serialize(null, serializer);
       const id = Oracle.identify(obj);
       const handler = this.handlers.get(id);
-      handler(obj, rinfo);
+
+      if (handler) handler(obj, rinfo);
     } else if (type === STREAM) {
       if (this.stream) {
         const serializer = new BufferSerializer(this.stream.version, buffer, 1);
@@ -188,8 +201,8 @@ export class UdpSocket<S = UdpStream> {
     serializer.uint8(STREAM);
     stream.serialize(serializer);
     const buffer = serializer.getBuffer();
-    this.socket.send(buffer, 0, serializer.length, stream.remote.port, stream.remote.address);
     console.log(`Sending data to ${stream.remote.address}:${stream.remote.port}, ${serializer.length} bytes`);
+    this.socket.send(buffer, 0, serializer.length, stream.remote.port, stream.remote.address);
   }
 
   send(to: EndPoint, msg: Serializable) {
@@ -197,5 +210,9 @@ export class UdpSocket<S = UdpStream> {
     serializer.uint8(GENERAL);
     this.oracle.serialize(msg, serializer);
     this.socket.send(serializer.getBuffer(), 0, serializer.length, to.port, to.address);
+  }
+
+  broadcast(port: number, msg: Serializable) {
+    this.send({ port, address: BROADCAST_ADDRESS }, msg);
   }
 }
