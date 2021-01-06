@@ -1,0 +1,30 @@
+name: Production Release
+
+on:
+  release:
+    types: [released]
+
+jobs:
+  production-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          git config user.name bhoos-devops
+          git config user.email devops@bhoos.com
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '12.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@bhoos'
+
+      - name: Publish release
+        run: |
+          pkg=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          echo "Releasing ${pkg}@${version} to latest"
+          # The following command doesn't work with `yarn tag` (2021-Jan-06)
+          npm dist-tag add ${pkg}@${version} latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}

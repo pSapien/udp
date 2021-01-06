@@ -1,0 +1,50 @@
+name: Staging Release Workflow
+
+on:
+  push:
+    branches:
+      - 'releases/**'
+
+jobs:
+  staging-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          git config user.name bhoos-devops
+          git config user.email devops@bhoos.com
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '12.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@bhoos'
+
+      - name: Install Packages
+        run: |
+          yarn
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Publish staging
+        run: |
+          yarn build
+          yarn version --patch
+          yarn publish --tag next
+          git push
+          echo "RELEASE_TAG=$(git describe --tags)" >> $GITHUB_ENV
+
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create PreRelease
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: Release ${{ env.RELEASE_TAG }}
+          commitish: release
+          draft: false
+          prerelease: true
