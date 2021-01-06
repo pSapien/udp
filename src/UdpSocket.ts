@@ -26,22 +26,32 @@ export class UdpSocket<S = UdpStream> {
   private stream: UdpStream;
   private streams: Map<string, { stream: UdpStream, userData: S}>;
   private closing: boolean = false;
+  private reuseHandle: undefined | number;
 
   constructor(oracle: Oracle, version: number) {
     this.version = version;
     this.oracle = oracle;
     this.socket = createSocket('udp4');
     this.socket.on('message', this.handleMessage);
-    this.socket.on('listening', () => {
-      if (Platform.OS !== 'android' || Platform.Version <= 23) {
-        this.socket.setBroadcast(true);
-      }
-    });
+    this.socket.on('listening', this.handleListen);
+  }
+
+  handleListen = () => {
+    if (Platform.OS !== 'android' || Platform.Version <= 23) {
+      this.socket.setBroadcast(true);
+    }
   }
 
   listen(port: number) {
-    this.socket.bind(port);
     this.streams = new Map<string, { stream: UdpStream, userData: S}>();
+
+    if (this.reuseHandle) {
+      clearTimeout(this.reuseHandle);
+      this.reuseHandle = undefined;
+      return;
+    }
+
+    this.socket.bind(port);
   }
 
   connect(endpoint: EndPoint, message: Serializable): UdpStream {
@@ -87,9 +97,12 @@ export class UdpSocket<S = UdpStream> {
     this.openHandler = undefined;
     this.closeHandler = undefined;
 
-    this.socket.removeAllListeners();
-    this.socket.close();
-    // this.socket = undefined;
+    this.reuseHandle = setTimeout(() => {
+      this.reuseHandle = undefined;
+      this.socket.removeListener('message', this.handleMessage);
+      this.socket.removeListener('listening', this.handleListen);
+      this.socket.close();
+    }, SOCKET_CLOSE_TIMEOUT);
   }
 
   on<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, source: EndPoint) => void) {
@@ -137,6 +150,7 @@ export class UdpSocket<S = UdpStream> {
     } else if (type === STREAM) {
       if (this.stream) {
         const serializer = new BufferSerializer(this.stream.version, buffer, 1);
+        // console.log('inside the type === STREAM', data)
         this.stream.receive(serializer, (item: Serializable) => {
           const id = Oracle.identify(item);
           const streamHandler = this.streamHandlers.get(id);
