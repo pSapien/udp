@@ -7,6 +7,9 @@
     "dist/index.js": "src/index.ts",
     "dgram": "react-native-udp"
   },
+  "files": [
+    "src", "dist"
+  ],
   "scripts": {
     "test": "jest",
     "clean": "rimraf dist",
