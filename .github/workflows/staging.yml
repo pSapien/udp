@@ -13,7 +13,8 @@ jobs:
       - run: |
           git config user.name bhoos-devops
           git config user.email devops@bhoos.com
-
+          ref=${{ github.ref }}
+          echo "BRANCH=${ref#refs/heads/}" >> $GITHUB_ENV
       - uses: actions/setup-node@v1
         with:
           node-version: '12.x'
@@ -33,7 +34,6 @@ jobs:
           yarn publish --tag next
           git push
           echo "RELEASE_TAG=$(git describe --tags)" >> $GITHUB_ENV
-
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,6 +45,6 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           release_name: Release ${{ env.RELEASE_TAG }}
-          commitish: release
+          commitish: ${{ env.BRANCH }}
           draft: false
           prerelease: true
