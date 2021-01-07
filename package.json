@@ -1,12 +1,16 @@
 {
   "name": "@bhoos/udp",
-  "version": "1.0.2",
+  "version": "1.0.3-beta.1",
   "description": "UDP direct and streaming communication library",
   "main": "dist/index.js",
   "react-native": {
     "dist/index.js": "src/index.ts",
     "dgram": "react-native-udp"
   },
+  "files": [
+    "src",
+    "dist"
+  ],
   "scripts": {
     "test": "jest",
     "clean": "rimraf dist",
