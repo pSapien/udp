@@ -1,6 +1,6 @@
 {
   "name": "@bhoos/udp",
-  "version": "1.0.3-beta.1",
+  "version": "1.0.3-beta.2",
   "description": "UDP direct and streaming communication library",
   "main": "dist/index.js",
   "react-native": {
