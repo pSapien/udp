@@ -16,7 +16,6 @@ on:
 
 jobs:
   prepare-master:
-    if: (github.event.pull_request.merged && github.event.pull_request.base.ref == 'master' && startsWith(github.event.pull_request.head.ref, 'releases/')) != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -37,29 +36,34 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_COMMITS: ${{ toJSON(github.event.commits) }}
         run: |
+          # Get the major and minor version part only
           version=$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")
+          # Use release branch of format `releases/X.X`
           releaseBranch=releases/${version}
           remoteBranch=$(git ls-remote origin ${releaseBranch})
           echo "VERSION=${version}" >> $GITHUB_ENV
           echo "RELEASE_BRANCH=${releaseBranch}" >> $GITHUB_ENV
           echo "REMOTE_BRANCH=${remoteBranch}" >> $GITHUB_ENV
-          releaseInfo=$(gh api /repos/:owner/:repo/git/ref/heads/${releaseBranch})
-          releaseSha=$(node -p "k=${releaseInfo}; k.object.sha")
-          echo "$releaseBranch >> $releaseSha"
-          # The master branch has the release commit on the pen ulitimate position when the branch is being merged from release
-          code="c=$GITHUB_COMMITS; k=c && c[c.length-2]; k && k.id"
-          masterSha=$(node -p "$code")
-
-          echo "onMaster >> ${masterSha}"
-          if [ "$releaseSha" = "$masterSha" ]; then staging="YES"; else staging="NO"; fi
-          echo "STAGING=${staging}" >> $GITHUB_ENV
-
+          
       - name: Create Release Branch ${{ env.RELEASE_BRANCH }} from master
-        if: env.STAGING == 'NO' && contains(env.REMOTE_BRANCH, env.RELEASE_BRANCH) != true
+        if: contains(env.REMOTE_BRANCH, env.RELEASE_BRANCH) != true
         run: |
           gh api repos/:owner/:repo/git/refs -F ref="refs/heads/${RELEASE_BRANCH}" -F sha="${{github.sha}}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Detect Staging Release
+        env:
+          GITHUB_COMMITS: ${{ toJSON(github.event.commits) }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          releaseInfo=$(gh api /repos/:owner/:repo/git/ref/heads/${{ env.RELEASE_BRANCH }})
+          releaseSha=$(node -p "k=${releaseInfo}; k.object.sha")
+          # The master branch has the release commit on the pen ulitimate position when the branch is being merged from release
+          code="c=$GITHUB_COMMITS; k=c && c[c.length-2]; k && k.id"
+          masterSha=$(node -p "$code")
+          if [ "$releaseSha" = "$masterSha" ]; then staging="YES"; else staging="NO"; fi
+          echo "STAGING=${staging}" >> $GITHUB_ENV
 
       # Push the changes to release branch using PERSONAL ACCESS TOKEN
       # since we want the github action to be triggered
