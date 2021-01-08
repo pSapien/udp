@@ -19,8 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 2 # required to perform a HEAD^1 query
       - run: |
           git config user.name bhoos-devops
           git config user.email devops@bhoos.com
