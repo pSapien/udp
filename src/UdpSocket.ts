@@ -1,22 +1,22 @@
-import { createSocket, Socket } from 'dgram';
+import { Socket } from 'dgram';
 import { AddressInfo } from 'net';
 import { EndPoint, UdpStream } from './UdpStream';
 import { BufferSerializer, Serializable, Oracle } from '@bhoos/serialization';
-import { Platform } from 'react-native';
+import { openSocket, bindSocket, closeSocket } from './CacheSockets';
 
 const GENERAL = 0;
 const STREAM = 1;
 const BROADCAST_ADDRESS = '255.255.255.255';
-const SOCKET_CLOSE_TIMEOUT = 300;
 
 function getEndPointId(endpoint: EndPoint) {
   return `${endpoint.address}:${endpoint.port}`;
 }
 
 export class UdpSocket<S = UdpStream> {
-  private socket: Socket;
+  private sock: Socket;
   private version: number;
   readonly oracle: Oracle;
+  readonly port: number;
 
   private handlers = new Map<number, (msg: Serializable, source: EndPoint) => void>();
   private streamHandlers = new Map<number, (msg: Serializable, userData: S, stream: UdpStream) => void>();
@@ -26,32 +26,21 @@ export class UdpSocket<S = UdpStream> {
   private stream: UdpStream;
   private streams: Map<string, { stream: UdpStream, userData: S}>;
   private closing: boolean = false;
-  private reuseHandle: undefined | number;
 
-  constructor(oracle: Oracle, version: number) {
+  constructor(oracle: Oracle, version: number, port: number = 0, onBind = () => {}) {
     this.version = version;
     this.oracle = oracle;
-    this.socket = createSocket('udp4');
-    this.socket.on('message', this.handleMessage);
-    this.socket.on('listening', this.handleListen);
+    this.port = port;
+    this.sock = openSocket(port);
+    this.sock.on('message', this.handleMessage);
+    this.sock.on('listening', function() {
+      onBind(this);
+    });
   }
 
-  handleListen = () => {
-    if (Platform.OS !== 'android' || Platform.Version <= 23) {
-      this.socket.setBroadcast(true);
-    }
-  }
-
-  listen(port: number) {
+  async listen() {
     this.streams = new Map<string, { stream: UdpStream, userData: S}>();
-
-    if (this.reuseHandle) {
-      clearTimeout(this.reuseHandle);
-      this.reuseHandle = undefined;
-      return;
-    }
-
-    this.socket.bind(port);
+    await bindSocket(this.sock, this.port);
   }
 
   connect(endpoint: EndPoint, message: Serializable): UdpStream {
@@ -97,12 +86,8 @@ export class UdpSocket<S = UdpStream> {
     this.openHandler = undefined;
     this.closeHandler = undefined;
 
-    this.reuseHandle = setTimeout(() => {
-      this.reuseHandle = undefined;
-      this.socket.removeListener('message', this.handleMessage);
-      this.socket.removeListener('listening', this.handleListen);
-      this.socket.close();
-    }, SOCKET_CLOSE_TIMEOUT);
+    this.sock.removeAllListeners();
+    closeSocket(this.sock);
   }
 
   on<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, source: EndPoint) => void) {
@@ -216,14 +201,14 @@ export class UdpSocket<S = UdpStream> {
     stream.serialize(serializer);
     const buffer = serializer.getBuffer();
     console.log(`Sending data to ${stream.remote.address}:${stream.remote.port}, ${serializer.length} bytes`);
-    this.socket.send(buffer, 0, serializer.length, stream.remote.port, stream.remote.address);
+    this.sock.send(buffer, 0, serializer.length, stream.remote.port, stream.remote.address);
   }
 
   send(to: EndPoint, msg: Serializable) {
     const serializer = new BufferSerializer(this.version, 1000);
     serializer.uint8(GENERAL);
     this.oracle.serialize(msg, serializer);
-    this.socket.send(serializer.getBuffer(), 0, serializer.length, to.port, to.address);
+    this.sock.send(serializer.getBuffer(), 0, serializer.length, to.port, to.address);
   }
 
   broadcast(port: number, msg: Serializable) {
