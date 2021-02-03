@@ -24,6 +24,7 @@ export class UdpSocket<S = UdpStream> {
   private stream: UdpStream;
   private streams: Map<string, { stream: UdpStream, userData: S}>;
   private closing: boolean = false;
+  private ending: boolean = false;
 
   constructor(oracle: Oracle, version: number) {
     this.version = version;
@@ -74,6 +75,10 @@ export class UdpSocket<S = UdpStream> {
   }
 
   end() {
+    if (this.ending) return;
+
+    this.ending = true;
+
     this.handlers.clear();
     this.streamHandlers.clear();
     this.connectHandlers.clear();
