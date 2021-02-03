@@ -1,7 +1,8 @@
-import { createSocket, Socket } from 'dgram';
+import { Socket } from 'dgram';
 import { AddressInfo } from 'net';
 import { EndPoint, UdpStream } from './UdpStream';
 import { BufferSerializer, Serializable, Oracle } from '@bhoos/serialization';
+import { openSocket, closeSocket } from './CacheSocket';
 
 const GENERAL = 0;
 const STREAM = 1;
@@ -25,17 +26,19 @@ export class UdpSocket<S = UdpStream> {
   private streams: Map<string, { stream: UdpStream, userData: S}>;
   private closing: boolean = false;
   private ending: boolean = false;
+  private port: number | undefined = undefined;
 
-  constructor(oracle: Oracle, version: number) {
+  constructor(oracle: Oracle, version: number, port: number, onBind: (s: Socket) => void) {
     this.version = version;
     this.oracle = oracle;
-    this.socket = createSocket('udp4');
+    this.socket = openSocket(port);
+    this.port = port;
     this.socket.on('message', this.handleMessage);
-  }
+    this.socket.on('listening', function() { onBind(this) });
 
-  listen(port: number) {
-    this.socket.bind(port);
-    this.streams = new Map<string, { stream: UdpStream, userData: S}>();
+    if (port) {
+      this.streams = new Map<string, { stream: UdpStream, userData: S}>();
+    }
   }
 
   connect(endpoint: EndPoint, message: Serializable): UdpStream {
@@ -86,7 +89,7 @@ export class UdpSocket<S = UdpStream> {
     this.closeHandler = undefined;
 
     this.socket.removeAllListeners();
-    this.socket.close();
+    closeSocket(this.port || this.socket);
   }
 
   on<T extends Serializable>(clazz: new (...args:any[]) => T, handler: (msg: T, source: EndPoint) => void) {
