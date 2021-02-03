@@ -28,7 +28,7 @@ export class UdpSocket<S = UdpStream> {
   private ending: boolean = false;
   private port: number | undefined = undefined;
 
-  constructor(oracle: Oracle, version: number, port: number, onBind: (s: Socket) => void) {
+  constructor(oracle: Oracle, version: number, port: number, onBind: (s: Socket) => void = () => {}) {
     this.version = version;
     this.oracle = oracle;
     this.socket = openSocket(port);
