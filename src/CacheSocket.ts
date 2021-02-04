@@ -2,7 +2,7 @@ import { createSocket, Socket } from 'dgram';
 
 type CacheSocket = {
   socket: Socket,
-  reuseHandle: null | typeof Timeout,
+  reuseHandle: null | ReturnType<typeof setTimeout>,
 }
 
 type Port = number;
