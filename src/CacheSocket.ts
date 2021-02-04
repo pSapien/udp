@@ -3,6 +3,8 @@ import { createSocket, Socket } from 'dgram';
 type CacheSocket = {
   socket: Socket,
   reuseHandle: null | ReturnType<typeof setTimeout>,
+  isBounded: boolean,
+  onBind: (s: Socket) => void,
 }
 
 type Port = number;
@@ -10,7 +12,7 @@ type Port = number;
 const cachedSockets = new Map<Port, CacheSocket>();
 const SOCKET_CLOSE_TIMEOUT = 50;
 
-export function openSocket(port: number) {
+export function openSocket(port: number, onBind: (s: Socket) => void) {
   if (!port) {
     const soc = createSocket('udp4');
     soc.bind();
@@ -23,6 +25,9 @@ export function openSocket(port: number) {
     if (!cachedSocket.reuseHandle) {
       throw new Error('Socket is already in used');
     }
+    if (cachedSocket.isBounded) {
+      cachedSocket.onBind(cachedSocket.socket);
+    }
 
     clearTimeout(cachedSocket.reuseHandle);
     cachedSocket.reuseHandle = null;
@@ -34,9 +39,15 @@ export function openSocket(port: number) {
   cachedSockets.set(port, { 
     reuseHandle: null,
     socket: newSocket,
+    isBounded: false,
+    onBind,
   });
 
-  newSocket.bind(port);
+  newSocket.bind(port, () => {
+    const boundedSocket = cachedSockets.get(port);
+    boundedSocket.isBounded = true;
+    boundedSocket.onBind(boundedSocket.socket);
+  });
 
   return newSocket;
 }

@@ -31,10 +31,9 @@ export class UdpSocket<S = UdpStream> {
   constructor(oracle: Oracle, version: number, port: number, onBind: (s: Socket) => void = () => {}) {
     this.version = version;
     this.oracle = oracle;
-    this.socket = openSocket(port);
+    this.socket = openSocket(port, onBind);
     this.port = port;
     this.socket.on('message', this.handleMessage);
-    this.socket.on('listening', function() { onBind(this) });
 
     if (port) {
       this.streams = new Map<string, { stream: UdpStream, userData: S}>();
@@ -127,7 +126,7 @@ export class UdpSocket<S = UdpStream> {
 
   private handleMessage = (data: Uint8Array, rinfo: AddressInfo) => {
     const type = data[0];
-    console.log(`Rx: ${rinfo.address}:${rinfo.port}, ${type}, ${data.length}`, data);
+    // console.log(`Rx: ${rinfo.address}:${rinfo.port}, ${type}, ${data.length}`, data);
 
     const buffer = Buffer.from(data);
     if (type === GENERAL) {
